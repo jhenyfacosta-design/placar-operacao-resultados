@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Operação Resultados — Placar</title>
+<!-- Firebase v8 — versão estável e testada -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;background:#080C14;color:#fff;min-height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+#grid-bg{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+#glow-line{position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#2ECC71,#FF7A00,#FF4D9E,#2D9CFF,#A259FF);z-index:10}
+#header{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:10px 20px 8px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(8,12,20,.95);backdrop-filter:blur(10px)}
+.logo-box{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#2ECC71,#2D9CFF);display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand-title{font-size:20px;font-weight:900;letter-spacing:2px;text-transform:uppercase;line-height:1}
+.brand-sub{font-size:11px;color:#888;letter-spacing:3px;font-weight:600;text-transform:uppercase}
+.tab-btn{padding:6px 18px;font-size:13px;border-radius:6px;font-weight:800;letter-spacing:1px;cursor:pointer;border:1px solid #333;font-family:inherit;transition:all .15s;background:transparent;color:#666}
+.tab-btn.active{background:#fff;color:#080C14;border-color:#fff}
+.live-badge{display:flex;align-items:center;gap:6px;background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);border-radius:20px;padding:4px 12px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#2ECC71;animation:pulse 2s infinite}
+.live-text{font-size:11px;color:#2ECC71;font-weight:700;letter-spacing:1px}
+.admin-btn{background:linear-gradient(135deg,#2D9CFF,#A259FF);color:#fff;padding:6px 20px;border-radius:8px;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.admin-btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+#body{position:relative;z-index:2;display:flex;height:calc(100vh - 58px)}
+#sidebar{width:220px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);padding:14px 10px;overflow-y:auto;background:rgba(8,12,20,.7)}
+.sidebar-label{font-size:11px;color:#555;font-weight:700;letter-spacing:3px;margin-bottom:10px;padding-left:4px;text-transform:uppercase}
+.team-card{margin-bottom:10px;border-radius:10px;background:rgba(255,255,255,.03);overflow:hidden}
+.team-card-head{padding:8px 10px;display:flex;align-items:center;gap:8px}
+.team-card-pts{font-size:20px;font-weight:900;line-height:1}
+.team-card-pts span{font-size:11px;color:#666;font-weight:600}
+.team-card-pips{padding:6px 10px;display:flex;flex-wrap:wrap;gap:3px}
+.pip{font-size:10px;color:#888;background:rgba(255,255,255,.04);border-radius:4px;padding:1px 5px}
+#main{flex:1;overflow-y:auto;padding:10px 14px}
+.race-row{display:flex;align-items:center;gap:10px;padding:5px 10px;margin-bottom:4px;border-radius:10px;transition:all .5s cubic-bezier(.4,0,.2,1)}
+.race-row.flash{animation:flashAnim 1.5s ease-out}
+@keyframes flashAnim{0%{background:rgba(255,255,255,.15);transform:scale(1.01)}100%{background:inherit;transform:scale(1)}}
+.rank-num{width:36px;text-align:center;font-size:14px;font-weight:900;color:#555;flex-shrink:0}
+.rank-num.top{font-size:22px;color:#fff}
+.avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;transition:box-shadow .3s}
+.seller-name{font-size:15px;font-weight:800;line-height:1.1}
+.seller-team-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.bar-wrap{flex:1;height:22px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:6px;transition:width .8s cubic-bezier(.4,0,.2,1);position:relative}
+.bar-label-in{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;color:rgba(255,255,255,.8);font-weight:700}
+.bar-label-out{position:absolute;top:50%;transform:translateY(-50%);font-size:10px;color:#aaa;font-weight:700;white-space:nowrap}
+.bar-zero{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#444}
+.pts-big{width:64px;text-align:right;flex-shrink:0;font-weight:900}
+.pts-big span{font-size:10px;color:#555;font-weight:600;margin-left:2px}
+#teams-view{display:none;grid-template-columns:1fr 1fr;gap:12px}
+.team-detail{border-radius:14px;overflow:hidden}
+.team-detail-head{padding:14px 16px;display:flex;align-items:center;gap:12px}
+.team-detail-pts{font-size:40px;font-weight:900;line-height:1}
+.team-detail-pts span{font-size:16px;color:#666;font-weight:600}
+#overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+#overlay.open{display:flex}
+#modal{background:#0E1520;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:26px;width:740px;max-height:92vh;overflow-y:auto;box-shadow:0 40px 80px rgba(0,0,0,.9);animation:ain .2s ease}
+@keyframes ain{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-title{font-size:22px;font-weight:900;letter-spacing:1px}
+.reset-btn{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700;background:rgba(255,45,85,.15);color:#FF2D55;border:1px solid rgba(255,45,85,.4);cursor:pointer;font-family:inherit;transition:all .15s}
+.reset-btn:hover{background:rgba(255,45,85,.3)}
+.close-btn{background:rgba(255,255,255,.08);color:#fff;padding:7px 14px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.close-btn:hover{background:rgba(255,255,255,.18)}
+.admin-tabs{display:flex;gap:8px;margin-bottom:22px}
+.admin-tab{flex:1;padding:13px 0;font-size:16px;border-radius:10px;font-weight:900;cursor:pointer;border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#888;font-family:inherit;transition:all .15s}
+.admin-tab.active{background:#fff;color:#080C14;border-color:#fff}
+.section-label{font-size:11px;color:#555;font-weight:700;letter-spacing:2px;margin-bottom:8px;text-transform:uppercase}
+.seller-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:16px}
+.team-col-label{font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:4px;text-align:center;text-transform:uppercase}
+.seller-pick-btn{width:100%;margin-bottom:3px;padding:5px 6px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);color:#aaa;font-family:inherit;text-align:left;display:flex;justify-content:space-between;transition:all .12s}
+.seller-pick-btn:hover{filter:brightness(1.2)}
+.act-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px}
+.act-btn{padding:10px 12px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:#888;font-family:inherit;text-align:left;transition:all .12s}
+.act-btn:hover{filter:brightness(1.2)}
+.act-desc{font-size:11px;margin-top:2px;font-weight:600}
+.act-btn.sel-pos{background:rgba(46,204,113,.15);border-color:#2ECC71;color:#fff}
+.act-btn.sel-neg{background:rgba(255,45,85,.2);border-color:#FF2D55;color:#fff}
+.qty-row{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.qty-btn{width:38px;height:38px;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.06);color:#777;font-family:inherit;transition:all .12s}
+.qty-btn.active{background:#2D9CFF;color:#fff;border-color:#2D9CFF}
+.confirm-btn{width:100%;padding:15px;border-radius:10px;font-size:17px;font-weight:900;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:none;font-family:inherit;transition:all .15s;background:rgba(255,255,255,.06);color:#444}
+.confirm-btn.ready{background:linear-gradient(135deg,#2ECC71,#2D9CFF);color:#fff}
+.confirm-btn.ready:hover{filter:brightness(1.1)}
+.custom-input{width:170px;padding:10px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:20px;font-weight:800;outline:none;font-family:inherit}
+.history-box{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px}
+.history-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.06)}
+.history-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.history-label{flex:1}
+.history-label .hl-title{font-size:14px;font-weight:700;color:#ddd}
+.history-label .hl-time{font-size:11px;color:#555;margin-top:2px}
+.history-pts{font-size:22px;font-weight:900;flex-shrink:0;min-width:80px;text-align:right}
+.undo-btn{padding:9px 18px;border-radius:9px;font-size:14px;font-weight:900;flex-shrink:0;background:rgba(255,159,10,.2);color:#FF9F0A;border:2px solid rgba(255,159,10,.5);cursor:pointer;font-family:inherit;transition:all .15s}
+.undo-btn:hover{background:rgba(255,159,10,.35)}
+#toast{position:fixed;bottom:30px;right:30px;z-index:1000;border-radius:12px;padding:12px 22px;font-size:18px;font-weight:800;display:none;animation:tin .3s ease}
+@keyframes tin{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#connecting{position:fixed;inset:0;z-index:500;background:#080C14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:#2ECC71;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="connecting">
+  <div class="spinner"></div>
+  <div style="font-size:16px;color:#888;letter-spacing:2px">CONECTANDO...</div>
+</div>
+
+<div id="grid-bg"></div>
+<div id="glow-line"></div>
+
+<div id="header">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo-box">🏆</div>
+    <div>
+      <div class="brand-title">OPERAÇÃO RESULTADOS</div>
+      <div class="brand-sub">Summit de Vendas · MA Hospitalar</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button class="tab-btn active" id="btn-race" onclick="switchScreen('race')">🏁 RANKING</button>
+    <button class="tab-btn" id="btn-teams" onclick="switchScreen('teams')">🏆 TIMES</button>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div class="live-badge"><div class="live-dot"></div><span class="live-text">AO VIVO</span></div>
+    <button class="admin-btn" onclick="openAdmin()">✏️ ADMIN</button>
+  </div>
+</div>
+
+<div id="body">
+  <div id="sidebar">
+    <div class="sidebar-label">Ranking de Times</div>
+    <div id="team-sidebar"></div>
+  </div>
+  <div id="main">
+    <div id="race-view"></div>
+    <div id="teams-view"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="overlay" onclick="overlayClick(event)">
+  <div id="modal">
+    <div class="modal-head">
+      <div class="modal-title">✏️ PAINEL ADMIN</div>
+      <div style="display:flex;gap:8px">
+        <button class="reset-btn" onclick="resetAll()">🗑️ Reset Geral</button>
+        <button class="close-btn" onclick="closeAdmin()">✕ Fechar</button>
+      </div>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" id="tab-add"  onclick="switchAdminTab('add')">➕  Adicionar Pontos</button>
+      <button class="admin-tab"        id="tab-undo" onclick="switchAdminTab('undo')">↩️  Estornar Lançamento</button>
+    </div>
+
+    <!-- ADICIONAR -->
+    <div id="panel-add">
+      <div class="section-label">1 · Selecione o Vendedor</div>
+      <div class="seller-grid" id="add-seller-grid"></div>
+      <div class="section-label">2 · Selecione a Atividade</div>
+      <div class="act-grid" id="act-grid"></div>
+      <div id="qty-section" style="display:none">
+        <div class="section-label">3 · Quantidade</div>
+        <div class="qty-row" id="qty-row"></div>
+      </div>
+      <div id="custom-section" style="display:none;margin-bottom:16px">
+        <div class="section-label">3 · Pontos (negativo para subtrair)</div>
+        <input class="custom-input" type="number" id="custom-input" placeholder="Ex: 15 ou -5" oninput="updateConfirm()"/>
+      </div>
+      <button class="confirm-btn" id="confirm-btn" onclick="submitPoints()">Selecione o vendedor e a atividade</button>
+    </div>
+
+    <!-- ESTORNAR -->
+    <div id="panel-undo" style="display:none">
+      <div class="section-label">Selecione o vendedor e clique em Estornar no lançamento desejado</div>
+      <div class="seller-grid" id="undo-seller-grid" style="margin-top:8px"></div>
+      <div id="history-area">
+        <div style="text-align:center;color:#444;font-size:15px;padding:30px 0">← Selecione um vendedor acima</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── DADOS ─── */
+const TEAMS = [
+  {id:1, name:"Internação & Sol. Complementares", short:"Internação",   color:"#2ECC71", icon:"🏥"},
+  {id:2, name:"Emergência",                        short:"Emergência",   color:"#FF7A00", icon:"🚨"},
+  {id:3, name:"Centro de Terapia Intensiva",       short:"CTI",          color:"#FF4D9E", icon:"💊"},
+  {id:4, name:"Centro Cirúrgico",                  short:"C. Cirúrgico", color:"#2D9CFF", icon:"🔪"},
+  {id:5, name:"C. Cirúrgico — Anestesia",          short:"Anestesia",    color:"#A259FF", icon:"💉"},
+];
+const ACTIVITIES = [
+  {id:"quiz1",      label:"Flash Quiz — Dia 1",                 pts:10,   desc:"+10 pts por pergunta"},
+  {id:"penalidade", label:"⚠️ Penalidade Pontualidade",         pts:-1,   desc:"-1 pt por ocorrência"},
+  {id:"quiz_grp",   label:"Flash Quiz Grupo — Dia 2",           pts:10,   desc:"+10 pts"},
+  {id:"caixa",      label:"Caixa de Perguntas — Dia 2",         pts:10,   desc:"+10 pts"},
+  {id:"pitch_vid",  label:"Pitch Vídeo — Dia 2",                pts:20,   desc:"+20 pts (time vencedor)"},
+  {id:"pitch_10",   label:"Pitch Individual Razoável — Dia 3",  pts:10,   desc:"+10 pts"},
+  {id:"pitch_20",   label:"Pitch Individual Excelente — Dia 3", pts:20,   desc:"+20 pts"},
+  {id:"meta",       label:"Meta Quarter Pré-Summit",             pts:10,   desc:"+10 pts"},
+  {id:"custom",     label:"✏️ Pontuação Manual",                pts:null, desc:"Valor livre (pode ser negativo)"},
+];
+const EMOJIS = ["👨‍⚕️","👩‍⚕️","🧑‍⚕️","👨‍🔬","👩‍🔬","🧑‍🔬"];
+const MEDALS = ["🥇","🥈","🥉"];
+
+const buildInitial = () =>
+  Array.from({length:30}, (_,i) => ({
+    id: i+1,
+    name: `Vendedor ${String(i+1).padStart(2,"0")}`,
+    teamId: Math.floor(i/6)+1,
+    points: 0,
+    emoji: EMOJIS[i % EMOJIS.length],
+    history: []
+  }));
+
+/* ─── STATE ─── */
+let sellers   = [];
+let screenTab = "race";
+let adminTabN = "add";
+let selId     = null;
+let actId     = null;
+let qty       = 1;
+let db, sellersRef;
+
+/* ─── FIREBASE ─── */
+const firebaseConfig = {
+  apiKey: "AIzaSyDG3AlRIBk2CH16GpneajVD5nKbdjJNWrM",
+  authDomain: "operacao-resultados-v2.firebaseapp.com",
+  databaseURL: "https://operacao-resultados-v2-default-rtdb.firebaseio.com",
+  projectId: "operacao-resultados-v2",
+  storageBucket: "operacao-resultados-v2.firebasestorage.app",
+  messagingSenderId: "377092019705",
+  appId: "1:377092019705:web:79ab31ee1fee1060b99928"
+};
+
+firebase.initializeApp(firebaseConfig);
+db = firebase.database();
+sellersRef = db.ref("sellers");
+
+sellersRef.once("value").then(snap => {
+  if (!snap.exists()) {
+    const init = {};
+    buildInitial().forEach(s => { init[s.id] = s; });
+    return sellersRef.set(init);
+  }
+}).then(() => {
+  document.getElementById("connecting").style.display = "none";
+  sellersRef.on("value", snap => {
+    const data = snap.val();
+    if (!data) return;
+    sellers = Object.values(data)
+      .sort((a,b) => a.id - b.id)
+      .map(s => ({
+        ...s,
+        history: s.history
+          ? (Array.isArray(s.history) ? s.history : Object.values(s.history))
+          : []
+      }));
+    renderAll();
+  });
+}).catch(err => {
+  document.getElementById("connecting").innerHTML =
+    `<div style="color:#FF2D55;font-size:16px;text-align:center;padding:20px">
+      ❌ Erro ao conectar ao Firebase:<br><br>
+      <code style="font-size:13px;color:#aaa">${err.message}</code><br><br>
+      <span style="font-size:13px;color:#666">Verifique as regras do Realtime Database<br>(modo de teste deve estar ativo)</span>
+    </div>`;
+});
+
+/* ─── RENDER ─── */
+function renderAll() {
+  renderSidebar();
+  if (screenTab === "race") renderRace();
+  else renderTeams();
+  if (document.getElementById("overlay").classList.contains("open")) {
+    renderSellerGrids();
+    if (adminTabN === "undo" && selId) renderHistory();
+  }
+}
+
+function getSorted()     { return [...sellers].sort((a,b) => b.points - a.points || a.id - b.id); }
+function getTeamScores() {
+  return TEAMS.map(t => ({
+    ...t,
+    total:   sellers.filter(s => s.teamId===t.id).reduce((a,s) => a+s.points, 0),
+    members: sellers.filter(s => s.teamId===t.id)
+  })).sort((a,b) => b.total - a.total);
+}
+
+function renderSidebar() {
+  const ts = getTeamScores();
+  document.getElementById("team-sidebar").innerHTML = ts.map((t,i) => {
+    const pips = sellers.filter(s=>s.teamId===t.id)
+                        .map(s=>`<div class="pip">${s.points}</div>`).join("");
+    return `<div class="team-card" style="border:1px solid ${t.color}33">
+      <div class="team-card-head" style="border-bottom:1px solid ${t.color}22">
+        <div style="font-size:18px;width:24px;text-align:center">${i<3?MEDALS[i]:`#${i+1}`}</div>
+        <div style="font-size:16px">${t.icon}</div>
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:800;color:${t.color};line-height:1.2">${t.short.toUpperCase()}</div>
+          <div class="team-card-pts">${t.total} <span>pts</span></div>
+        </div>
+      </div>
+      <div class="team-card-pips">${pips}</div>
+    </div>`;
+  }).join("");
+}
+
+function renderRace() {
+  const sorted = getSorted();
+  const maxPts = Math.max(...sellers.map(s=>s.points), 50);
+  document.getElementById("race-view").innerHTML = sorted.map((s,idx) => {
+    const team = TEAMS.find(t=>t.id===s.teamId);
+    const pct  = maxPts>0 ? (s.points/maxPts)*100 : 0;
+    const top  = idx<3;
+    let barIn="", barOut="";
+    if (pct>12)                barIn  = `<div class="bar-label-in">${s.points} pts</div>`;
+    if (pct<=12 && s.points>0) barOut = `<div class="bar-label-out" style="left:${pct}%">${s.points} pts</div>`;
+    if (s.points===0)          barOut = `<div class="bar-zero">0 pts</div>`;
+    return `<div class="race-row" id="row-${s.id}"
+      style="border:1px solid ${top?team.color+"44":"rgba(255,255,255,.04)"};background:${top?`linear-gradient(90deg,${team.color}11,transparent)`:"rgba(255,255,255,.02)"}">
+      <div class="rank-num${top?" top":""}">${top?MEDALS[idx]:`#${idx+1}`}</div>
+      <div class="avatar" style="background:${team.color}22;border:3px solid ${team.color};box-shadow:0 0 6px ${team.color}66">${s.emoji}</div>
+      <div style="width:150px;flex-shrink:0">
+        <div class="seller-name">${s.name}</div>
+        <div class="seller-team-label" style="color:${team.color}">${team.short}</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:${pct}%;min-width:${pct>0?20:0}px;background:linear-gradient(90deg,${team.color}bb,${team.color});box-shadow:${pct>0?`0 0 8px ${team.color}77`:"none"}">${barIn}</div>
+        ${barOut}
+      </div>
+      <div class="pts-big" style="font-size:${top?24:18}px;color:${top?team.color:"#ccc"};text-shadow:${top?`0 0 12px ${team.color}`:"none"}">${s.points}<span>pts</span></div>
+    </div>`;
+  }).join("");
+}
+
+function renderTeams() {
+  const ts = getTeamScores();
+  const tv = document.getElementById("teams-view");
+  tv.innerHTML = ts.map((t,i) => {
+    const rows = [...t.members].sort((a,b)=>b.points-a.points).map((m,mi) =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 10px;border-bottom:${mi<5?"1px solid rgba(255,255,255,.04)":"none"}">
+        <span style="font-size:14px">${m.emoji}</span>
+        <span style="flex:1;font-size:14px;font-weight:600;color:#ddd">${m.name}</span>
+        <span style="font-size:18px;font-weight:900;color:${t.color}">${m.points}</span>
+      </div>`).join("");
+    return `<div class="team-detail" style="border:1px solid ${t.color}44;background:linear-gradient(135deg,${t.color}0D,rgba(8,12,20,.9))">
+      <div class="team-detail-head" style="border-bottom:1px solid ${t.color}22">
+        <div style="font-size:36px">${t.icon}</div>
+        <div style="flex:1">
+          <div style="font-size:16px;font-weight:900;color:${t.color};letter-spacing:1px;text-transform:uppercase">${t.name}</div>
+          <div class="team-detail-pts">${t.total} <span>pts</span></div>
+        </div>
+        <div style="font-size:40px">${i<3?MEDALS[i]:`#${i+1}`}</div>
+      </div>
+      <div style="padding:10px 0">${rows}</div>
+    </div>`;
+  }).join("");
+  tv.style.display = "grid";
+}
+
+function renderSellerGrids() {
+  ["add","undo"].forEach(panel => {
+    document.getElementById(`${panel}-seller-grid`).innerHTML = TEAMS.map(t => {
+      const btns = sellers.filter(s=>s.teamId===t.id).map(s => {
+        const sel = selId===s.id;
+        return `<button class="seller-pick-btn" onclick="pickSeller(${s.id},'${panel}')"
+          style="${sel?`background:${t.color};border-color:${t.color};color:#fff`:""}">
+          <span>${s.name.replace("Vendedor ","V")}</span>
+          <span style="color:${sel?"rgba(255,255,255,.8)":"#555"}">${s.points}p</span>
+        </button>`;
+      }).join("");
+      return `<div>
+        <div class="team-col-label" style="color:${t.color}">${t.icon} ${t.short}</div>
+        ${btns}
+      </div>`;
+    }).join("");
+  });
+}
+
+function renderActButtons() {
+  document.getElementById("act-grid").innerHTML = ACTIVITIES.map(a => {
+    const neg = a.pts!==null && a.pts<0;
+    const sel = actId===a.id;
+    let cls = "act-btn";
+    if (sel) cls += neg?" sel-neg":" sel-pos";
+    return `<button class="${cls}" onclick="pickActivity('${a.id}')">
+      <div>${a.label}</div>
+      <div class="act-desc" style="color:${neg?"#FF2D55":a.pts>0?"#2ECC71":"#888"}">${a.desc}</div>
+    </button>`;
+  }).join("");
+}
+
+function renderQtyButtons() {
+  document.getElementById("qty-row").innerHTML =
+    [1,2,3,4,5,6,7,8,9,10,11,12].map(n =>
+      `<button class="qty-btn${qty===n?" active":""}" onclick="pickQty(${n})">${n}</button>`
+    ).join("");
+}
+
+function renderHistory() {
+  const seller = sellers.find(s=>s.id===selId);
+  if (!seller) return;
+  const team = TEAMS.find(t=>t.id===seller.teamId);
+  const head = `<div class="history-head">
+    <div style="font-size:24px">${seller.emoji}</div>
+    <div>
+      <div style="font-size:18px;font-weight:900">${seller.name}</div>
+      <div style="font-size:12px;color:${team.color};font-weight:700">${team.name} · ${seller.points} pts totais</div>
+    </div>
+  </div>`;
+  const rows = seller.history.length===0
+    ? `<div style="font-size:14px;color:#555;text-align:center;padding:24px 0">Nenhum lançamento ainda.</div>`
+    : seller.history.map((h,index) => {
+        const t = new Date(h.at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        return `<div class="history-row">
+          <div class="history-label">
+            <div class="hl-title">${h.label}</div>
+            <div class="hl-time">${t}</div>
+          </div>
+          <div class="history-pts" style="color:${h.pts>=0?"#2ECC71":"#FF2D55"}">${h.pts>0?"+":""}${h.pts} pts</div>
+          <button class="undo-btn" onclick="reverseEntry(${selId},${index})">↩️ Estornar</button>
+        </div>`;
+      }).join("");
+  document.getElementById("history-area").innerHTML =
+    `<div class="history-box">${head}${rows}</div>`;
+}
+
+/* ─── ACTIONS ─── */
+function pickSeller(id, panel) {
+  selId = id;
+  renderSellerGrids();
+  if (panel==="undo") renderHistory();
+  else updateConfirm();
+}
+
+function pickActivity(id) {
+  actId = id; qty = 1;
+  document.getElementById("custom-input").value = "";
+  renderActButtons();
+  const isCustom = id==="custom", isQty = id!=="custom" && id!=="penalidade";
+  document.getElementById("qty-section").style.display    = isQty    ? "block":"none";
+  document.getElementById("custom-section").style.display = isCustom ? "block":"none";
+  if (isQty) renderQtyButtons();
+  updateConfirm();
+}
+
+function pickQty(n) { qty=n; renderQtyButtons(); updateConfirm(); }
+
+function updateConfirm() {
+  const btn = document.getElementById("confirm-btn");
+  if (!selId || !actId) {
+    btn.className="confirm-btn";
+    btn.textContent="Selecione o vendedor e a atividade";
+    return;
+  }
+  const act = ACTIVITIES.find(a=>a.id===actId);
+  let pts = act.id==="custom"
+    ? (document.getElementById("custom-input").value !== "" ? Number(document.getElementById("custom-input").value) : "?")
+    : act.pts * qty;
+  const sign = typeof pts==="number" && pts>0 ? "+" : "";
+  btn.className="confirm-btn ready";
+  btn.textContent=`✅ CONFIRMAR ${sign}${pts} PTS`;
+}
+
+function submitPoints() {
+  if (!selId || !actId) return;
+  const act = ACTIVITIES.find(a=>a.id===actId);
+  const pts = act.id==="custom"
+    ? Number(document.getElementById("custom-input").value)
+    : act.pts * qty;
+  if (isNaN(pts) || pts===0) return;
+
+  const seller = sellers.find(s=>s.id===selId);
+  const team   = TEAMS.find(t=>t.id===seller.teamId);
+
+  db.ref(`sellers/${selId}`).transaction(cur => {
+    if (!cur) return;
+    const hist = cur.history
+      ? (Array.isArray(cur.history) ? [...cur.history] : Object.values(cur.history))
+      : [];
+    hist.unshift({label:act.label, pts, at:Date.now()});
+    return {...cur, points:(cur.points||0)+pts, history:hist.slice(0,80)};
+  }).then(() => {
+    showToast(`${pts>0?"+":""}${pts} pts → ${seller.name}`, team.color);
+    flashRow(selId);
+    actId=null; qty=1;
+    document.getElementById("custom-input").value="";
+    document.getElementById("qty-section").style.display="none";
+    document.getElementById("custom-section").style.display="none";
+    renderActButtons(); updateConfirm();
+  });
+}
+
+function reverseEntry(sellerId, index) {
+  const seller = sellers.find(s=>s.id===sellerId);
+  const entry  = seller && seller.history[index];
+  if (!entry) return;
+  if (!confirm(`Estornar "${entry.label}" (${entry.pts>0?"+":""}${entry.pts} pts) de ${seller.name}?`)) return;
+
+  db.ref(`sellers/${sellerId}`).transaction(cur => {
+    if (!cur) return;
+    const hist = Array.isArray(cur.history)
+      ? [...cur.history] : Object.values(cur.history||{});
+    hist.splice(index, 1);
+    return {...cur, points:(cur.points||0)-entry.pts, history:hist};
+  }).then(() => showToast(`↩️ Estornado — ${seller.name}`, "#FF9F0A"));
+}
+
+function resetAll() {
+  if (!confirm("⚠️ Zerar TODOS os pontos? Não dá pra desfazer.")) return;
+  const init = {};
+  buildInitial().forEach(s => { init[s.id]=s; });
+  sellersRef.set(init).then(() => showToast("Placar zerado!", "#FF2D55"));
+}
+
+/* ─── UI ─── */
+function switchScreen(tab) {
+  screenTab = tab;
+  document.getElementById("btn-race").className  = "tab-btn"+(tab==="race"?" active":"");
+  document.getElementById("btn-teams").className = "tab-btn"+(tab==="teams"?" active":"");
+  document.getElementById("race-view").style.display  = tab==="race"  ? "block":"none";
+  document.getElementById("teams-view").style.display = tab==="teams" ? "grid":"none";
+  if (tab==="race") renderRace(); else renderTeams();
+}
+
+function switchAdminTab(tab) {
+  adminTabN=tab; selId=null; actId=null;
+  document.getElementById("tab-add").className  = "admin-tab"+(tab==="add"?" active":"");
+  document.getElementById("tab-undo").className = "admin-tab"+(tab==="undo"?" active":"");
+  document.getElementById("panel-add").style.display  = tab==="add"  ? "block":"none";
+  document.getElementById("panel-undo").style.display = tab==="undo" ? "block":"none";
+  renderSellerGrids();
+  if (tab==="undo") document.getElementById("history-area").innerHTML=
+    `<div style="text-align:center;color:#444;font-size:15px;padding:30px 0">← Selecione um vendedor acima</div>`;
+  if (tab==="add") { renderActButtons(); updateConfirm(); }
+}
+
+function openAdmin() {
+  selId=null; actId=null; qty=1;
+  adminTabN="add";
+  document.getElementById("panel-add").style.display="block";
+  document.getElementById("panel-undo").style.display="none";
+  document.getElementById("tab-add").className="admin-tab active";
+  document.getElementById("tab-undo").className="admin-tab";
+  document.getElementById("qty-section").style.display="none";
+  document.getElementById("custom-section").style.display="none";
+  document.getElementById("custom-input").value="";
+  renderSellerGrids(); renderActButtons(); updateConfirm();
+  document.getElementById("overlay").classList.add("open");
+}
+
+function closeAdmin()  { document.getElementById("overlay").classList.remove("open"); }
+function overlayClick(e){ if(e.target===document.getElementById("overlay")) closeAdmin(); }
+
+let toastTimer;
+function showToast(msg, color) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.cssText=`position:fixed;bottom:30px;right:30px;z-index:1000;border-radius:12px;padding:12px 22px;font-size:18px;font-weight:800;animation:tin .3s ease;display:block;background:#111;border:1px solid ${color};color:${color};box-shadow:0 0 24px ${color}66`;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.style.display="none",2800);
+}
+
+function flashRow(id) {
+  const el = document.getElementById(`row-${id}`);
+  if (!el) return;
+  el.classList.add("flash");
+  setTimeout(()=>el.classList.remove("flash"),1500);
+}
+
+// init
+switchScreen("race");
+</script>
+</body>
+</html>
