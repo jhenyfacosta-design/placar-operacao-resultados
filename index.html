@@ -209,11 +209,47 @@ const ACTIVITIES = [
 const EMOJIS = ["👨‍⚕️","👩‍⚕️","🧑‍⚕️","👨‍🔬","👩‍🔬","🧑‍🔬"];
 const MEDALS = ["🥇","🥈","🥉"];
 
+const SELLERS_DATA = [
+  // Internação (Verde) — id time 1
+  {id:1,  name:"João Carlos de Souza ⭐",          teamId:1},
+  {id:2,  name:"Matheus Osvaldo Sagaz",             teamId:1},
+  {id:3,  name:"Isadora Faraco Correa",             teamId:1},
+  {id:4,  name:"Juliana de Rezende Moreira",        teamId:1},
+  {id:5,  name:"Henrique Artioli",                  teamId:1},
+  {id:6,  name:"Bruno Pereira Machado",             teamId:1},
+  // CTI (Rosa) — id time 3
+  {id:8,  name:"Sergio Mauricio B. de Souza ⭐",   teamId:3},
+  {id:9,  name:"Marlon Bender Nunes",               teamId:3},
+  {id:10, name:"Leopoldo Aquini",                   teamId:3},
+  {id:11, name:"Andre Thiago S. Vagetti",           teamId:3},
+  {id:12, name:"Rogerio de Souza Barros",           teamId:3},
+  {id:13, name:"Aline Da Costa Baptistel",          teamId:3},
+  // Centro Cirúrgico (Azul) — id time 4
+  {id:14, name:"Thiago Roberto de Souza ⭐",        teamId:4},
+  {id:15, name:"Roberto Miler",                     teamId:4},
+  {id:16, name:"Elisandro Rocha",                   teamId:4},
+  {id:17, name:"Geisa Soares",                      teamId:4},
+  {id:18, name:"Marina Coelho Aires de Melo",       teamId:4},
+  {id:19, name:"Gustavo Orestes Pires",             teamId:4},
+  // Anestesia (Roxo) — id time 5
+  {id:20, name:"Daniel Lucca Sanchez ⭐",           teamId:5},
+  {id:21, name:"Raina Rocha Hernandez",             teamId:5},
+  {id:22, name:"Cesar Fortunato Cristiano",         teamId:5},
+  {id:23, name:"Cristiane Rolon",                   teamId:5},
+  {id:24, name:"Giancarlo Coraini Gonzales",        teamId:5},
+  {id:25, name:"Paulo H. do Nascimento Monteiro",   teamId:5},
+  // Emergência (Laranja) — id time 2
+  {id:26, name:"Frederico Iurcic Bevilacqua ⭐",   teamId:2},
+  {id:27, name:"Francisco Rafael",                  teamId:2},
+  {id:28, name:"Ricardo Alves Correa",              teamId:2},
+  {id:29, name:"Vinicius Ronaldo Menchick",         teamId:2},
+  {id:30, name:"Ana Paula Campos",                  teamId:2},
+  {id:31, name:"Valdenir Cunha",                    teamId:2},
+];
+
 const buildInitial = () =>
-  Array.from({length:30}, (_,i) => ({
-    id: i+1,
-    name: `Vendedor ${String(i+1).padStart(2,"0")}`,
-    teamId: Math.floor(i/6)+1,
+  SELLERS_DATA.map((s, i) => ({
+    ...s,
     points: 0,
     emoji: EMOJIS[i % EMOJIS.length],
     history: []
@@ -244,9 +280,16 @@ db = firebase.database();
 sellersRef = db.ref("sellers");
 
 sellersRef.once("value").then(snap => {
+  const init = {};
+  buildInitial().forEach(s => { init[s.id] = s; });
   if (!snap.exists()) {
-    const init = {};
-    buildInitial().forEach(s => { init[s.id] = s; });
+    return sellersRef.set(init);
+  }
+  // Se o número de vendedores mudou ou o nome do primeiro não bate, reinicia
+  const data = snap.val();
+  const keys = Object.keys(data);
+  const firstName = data[keys[0]]?.name || "";
+  if (keys.length !== SELLERS_DATA.length || !firstName.includes("João")) {
     return sellersRef.set(init);
   }
 }).then(() => {
@@ -514,6 +557,10 @@ function reverseEntry(sellerId, index) {
 }
 
 function resetAll() {
+  const senha = prompt("🔒 Senha para Reset Geral:");
+  if (senha !== "1234") {
+    alert("❌ Senha incorreta! Reset cancelado."); return;
+  }
   if (!confirm("⚠️ Zerar TODOS os pontos? Não dá pra desfazer.")) return;
   const init = {};
   buildInitial().forEach(s => { init[s.id]=s; });
@@ -543,6 +590,10 @@ function switchAdminTab(tab) {
 }
 
 function openAdmin() {
+  const senha = prompt("🔒 Senha de acesso ao Admin:");
+  if (senha !== "9245") {
+    alert("❌ Senha incorreta!"); return;
+  }
   selId=null; actId=null; qty=1;
   adminTabN="add";
   document.getElementById("panel-add").style.display="block";
